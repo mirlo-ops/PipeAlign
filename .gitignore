@@ -1,0 +1,33 @@
+# Byte-code / cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build artefacts
+build/
+dist/
+*.spec
+
+# Runtime data (журналы пишутся в %APPDATA%/PipeAlign, но на всякий случай)
+journal.json
+journal.backup.json
+journal.bad.json
+
+# Exported reports
+*.csv
+report_*.txt
+
+# Screenshot preview from scripts/render_demo.py
+.preview/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store

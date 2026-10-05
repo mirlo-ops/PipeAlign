@@ -1,0 +1,80 @@
+{
+  "machine": {
+    "name": "Косовалковая правильная машина, демо-модель",
+    "min_diameter": 20,
+    "max_diameter": 89,
+    "min_gap": 10,
+    "max_gap": 50,
+    "roller_count": 3
+  },
+  "materials": [
+    {"id": "Ст20", "correction": 0.0, "speed_penalty": 0.0},
+    {"id": "20", "correction": 0.1, "speed_penalty": 0.2},
+    {"id": "09Г2С", "correction": 0.3, "speed_penalty": 0.5},
+    {"id": "12Х18Н10Т", "correction": 0.8, "speed_penalty": 1.2}
+  ],
+  "operations": [
+    "после гибки",
+    "после сварки",
+    "после механообработки",
+    "после термообработки"
+  ],
+  "base_recipes": [
+    {"diameter": 32, "wall": 2.5, "gap": 16.8},
+    {"diameter": 42, "wall": 3.0, "gap": 21.5},
+    {"diameter": 48, "wall": 3.5, "gap": 24.8},
+    {"diameter": 57, "wall": 3.5, "gap": 29.8},
+    {"diameter": 76, "wall": 4.0, "gap": 38.6}
+  ],
+  "deflection_curve": [
+    [0, 0.0],
+    [2, 0.1],
+    [4, 0.3],
+    [6, 0.6],
+    [8, 0.9],
+    [12, 1.5],
+    [18, 2.5],
+    [30, 4.0]
+  ],
+  "demo_orders": [
+    {
+      "order_no": "ДЕМО-001",
+      "batch": "A-101",
+      "operator": "Иванов И.И.",
+      "diameter": 42,
+      "wall_thickness": 3.0,
+      "material": "Ст20",
+      "length": 6000,
+      "operation": "после механообработки",
+      "has_deflection": false,
+      "deflection": 0,
+      "required_straightness": 1.5
+    },
+    {
+      "order_no": "ДЕМО-002",
+      "batch": "B-204",
+      "operator": "Петров П.П.",
+      "diameter": 57,
+      "wall_thickness": 3.5,
+      "material": "09Г2С",
+      "length": 6000,
+      "operation": "после гибки",
+      "has_deflection": true,
+      "deflection": 6,
+      "required_straightness": 1.5
+    },
+    {
+      "order_no": "ДЕМО-003",
+      "batch": "C-310",
+      "operator": "Сидоров С.С.",
+      "diameter": 76,
+      "wall_thickness": 4.0,
+      "material": "20",
+      "length": 8000,
+      "operation": "после термообработки",
+      "has_deflection": true,
+      "deflection": 12,
+      "required_straightness": 1.5
+    }
+  ]
+}
