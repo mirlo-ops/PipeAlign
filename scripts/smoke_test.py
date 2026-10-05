@@ -22,10 +22,19 @@ if str(PROJECT_ROOT) not in sys.path:
 from PySide6.QtCore import Qt  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from app.services.auth_service import Session, authenticate  # noqa: E402
 from app.services.journal_service import JournalService  # noqa: E402
 from app.services.recipe_repository import RecipeRepository  # noqa: E402
 from app.ui.main_window import MainWindow  # noqa: E402
 from app.utils.paths import style_path  # noqa: E402
+
+
+def make_session(login: str, password: str) -> Session:
+    """Создаёт сессию для прогона интерфейса."""
+    session = authenticate(login, password)
+    if session is None:
+        raise SystemExit(f"Учётная запись {login} не найдена")
+    return session
 
 
 def pump(application: QApplication, times: int = 6) -> None:
@@ -44,11 +53,13 @@ def main() -> int:
 
     repository = RecipeRepository()
     journal = JournalService()
-    window = MainWindow(repository, journal)
+    session = make_session("korablev", "4321")
+    window = MainWindow(repository, journal, session)
     window.show()
     pump(application)
 
-    print("1. Демо-заказ ДЕМО-002 загружен в форму:", window.input_panel.collect())
+    print(f"1. Вход: {session.operator_name}, роль «{session.role_title}»")
+    print("   Демо-заказ ДЕМО-002 в форме:", window.input_panel.collect())
 
     window._on_calculate()
     pump(application)
@@ -130,6 +141,27 @@ def main() -> int:
     print("12. Имена выгрузки:", suggested, "|", plain)
 
     print("13. Журнал сохранён в:", journal.path)
+
+    # Смена пользователя: окно входа модальное, поэтому проверяем то,
+    # что не требует диалога — сигнал выхода и чистоту нового окна.
+    fired: list[str] = []
+    window.logoutRequested.connect(lambda: fired.append("выход"))
+    window._finish_scenario()
+    window.logoutRequested.emit()
+    print("14. Сигнал смены пользователя:", "получен" if fired else "НЕ ПОЛУЧЕН")
+
+    operator = MainWindow(repository, JournalService(), make_session("akulov", "1234"))
+    operator.show()
+    pump(application)
+    print("15. Новое окно оператора:", operator.user_label.text())
+    print(
+        "    «Заказ и операция» скрыта:",
+        not operator.input_panel._order_box.isVisible(),
+    )
+    operator._on_calculate()
+    pump(application)
+    print("    уставка оператора:", operator._result.final_gap, "мм")
+
     print("ПРОВЕРКА ПРОЙДЕНА")
     return 0
 

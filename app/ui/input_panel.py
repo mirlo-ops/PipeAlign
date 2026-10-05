@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 
 from app.models.machine import MachineConfig
 from app.models.pipe import Pipe
+from app.services.auth_service import Session
 
 #: Начальные значения формы (совпадают с демо-заказом ДЕМО-002).
 DEFAULT_ORDER_NO = "ДЕМО-002"
@@ -87,6 +88,10 @@ class InputPanel(QScrollArea):
         self._machine = machine
         self._suppress_signals = False
 
+        # ФИО сотрудника подставляется при входе и не затирается сбросом
+        # формы: записи в журнале должны принадлежать вошедшему человеку.
+        self._operator_name = DEFAULT_OPERATOR
+
         self.setWidgetResizable(True)
         self.setFrameShape(QScrollArea.Shape.NoFrame)
         self.setHorizontalScrollBarPolicy(
@@ -102,7 +107,8 @@ class InputPanel(QScrollArea):
         self._build_geometry_box()
         self.populate_choices(materials, operations)
         self._layout.addWidget(self._build_actions_box())
-        self._layout.addWidget(self._build_preset_box())
+        self._preset_box = self._build_preset_box()
+        self._layout.addWidget(self._preset_box)
         self._layout.addStretch(1)
 
         self.setWidget(container)
@@ -113,7 +119,13 @@ class InputPanel(QScrollArea):
     # ------------------------------------------------------------------
 
     def _build_order_box(self) -> None:
-        """Группа «Заказ и операция»."""
+        """Группа «Заказ и операция».
+
+        Оператору станка группа не нужна: он вводит геометрию трубы, а
+        номер заказа и партия приходят с нарядом. Группа скрывается, но
+        остаётся в форме и сохраняет значения, поэтому расчёт и журнал
+        работают одинаково для обеих ролей.
+        """
         box = QGroupBox("Заказ и операция")
         form = QFormLayout(box)
         form.setSpacing(8)
@@ -141,6 +153,7 @@ class InputPanel(QScrollArea):
         )
         form.addRow(self._field_label("Операция"), self.operation_combo)
 
+        self._order_box = box
         self._layout.addWidget(box)
 
     def _build_geometry_box(self) -> None:
@@ -254,16 +267,9 @@ class InputPanel(QScrollArea):
 
         layout.addLayout(row)
 
-        self.explanation_button = QPushButton("Показать обоснование")
-        self.explanation_button.setEnabled(False)
-        self.explanation_button.setToolTip(
-            "Текстовое объяснение расчёта: почему получилась такая уставка"
-        )
-        self.explanation_button.clicked.connect(
-            lambda: self.explanationRequested.emit()
-        )
-        layout.addWidget(self.explanation_button)
-
+        # Кнопки «Показать обоснование» здесь нет намеренно: обоснование
+        # открывается из панели результата, рядом с самим расчётом.
+        # Две одинаковые кнопки в двух панелях только перегружали форму.
         return container
 
     def _build_preset_box(self) -> QWidget:
@@ -404,7 +410,7 @@ class InputPanel(QScrollArea):
         try:
             self.order_edit.setText(DEFAULT_ORDER_NO)
             self.batch_edit.setText(DEFAULT_BATCH)
-            self.operator_edit.setText(DEFAULT_OPERATOR)
+            self.operator_edit.setText(self._operator_name)
             self.diameter_spin.setValue(57.0)
             self.wall_spin.setValue(3.5)
             self.length_spin.setValue(6000)
@@ -429,9 +435,17 @@ class InputPanel(QScrollArea):
         """Управляет доступностью кнопки «Ручная коррекция»."""
         self.manual_button.setEnabled(enabled)
 
-    def set_explanation_enabled(self, enabled: bool) -> None:
-        """Управляет доступностью кнопки «Показать обоснование»."""
-        self.explanation_button.setEnabled(enabled)
+    def apply_role(self, session: Session) -> None:
+        """Настраивает форму под роль сотрудника.
+
+        Оператору скрывается группа «Заказ и операция»: её поля приходят
+        с нарядом, и вводить их у станка каждый раз не нужно. Поля не
+        удаляются, а только скрываются, поэтому :meth:`collect` продолжает
+        отдавать полный :class:`Pipe`, а расчёт и журнал не меняются.
+        """
+        self._operator_name = session.operator_name
+        self._order_box.setVisible(session.show_order_form)
+        self.operator_edit.setText(session.operator_name)
 
     def set_controls_enabled(self, enabled: bool) -> None:
         """Блокирует форму на время демо-сценария."""
@@ -455,7 +469,6 @@ class InputPanel(QScrollArea):
             self.demo_scenario_button,
             self.preset_button,
             self.mistake_button,
-            self.explanation_button,
         ):
             button.setEnabled(enabled)
 

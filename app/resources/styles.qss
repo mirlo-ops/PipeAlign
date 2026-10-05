@@ -490,14 +490,18 @@ QLabel#ValueLabel {
     font-weight: bold;
 }
 
+/* Дисклеймер: спокойная служебная плашка, а не предупреждающая вывеска.
+   Тонкая акцентная полоса слева вместо рамки по периметру, приглушённый
+   текст без жирного начертания — так статус читается как часть интерфейса. */
+
 QLabel#Disclaimer {
-    background-color: #3a2f18;
-    color: #f1c40f;
-    border: 1px solid #f1c40f;
-    border-radius: 4px;
-    padding: 8px 12px;
-    font-size: 10pt;
-    font-weight: bold;
+    background-color: #232830;
+    color: #a8b2bd;
+    border: none;
+    border-left: 2px solid #6f7b88;
+    border-radius: 2px;
+    padding: 6px 12px;
+    font-size: 9pt;
 }
 
 QLabel#StatusBadge {
@@ -570,6 +574,77 @@ QStatusBar QLabel {
 QStatusBar QLabel#DemoBadge {
     color: #ff8c00;
     font-weight: bold;
+}
+
+QStatusBar QLabel#UserBadge {
+    color: #c3ccd6;
+    font-weight: bold;
+}
+
+/* Выход из учётной записи: спокойная кнопка, не тревожная кнопка.
+   В строке состояния она соседствует с именем сотрудника, поэтому
+   выглядит частью подписи, а не вторым действием. */
+
+QStatusBar QPushButton#LogoutButton {
+    background-color: transparent;
+    color: #8f99a5;
+    border: 1px solid #3d4652;
+    border-radius: 3px;
+    padding: 2px 10px;
+    font-size: 9pt;
+}
+
+QStatusBar QPushButton#LogoutButton:hover {
+    background-color: #2f353d;
+    color: #e6ebf0;
+    border-color: #5a6672;
+}
+
+QStatusBar QPushButton#LogoutButton:pressed {
+    background-color: #272c33;
+}
+
+/* --- Окно входа --------------------------------------------------------- */
+
+QWidget#LoginHeader {
+    background-color: #232830;
+    border-bottom: 1px solid #3d4652;
+}
+
+QLabel#LoginTitle {
+    color: #ff8c00;
+    background: transparent;
+}
+
+QLabel#LoginHintBox {
+    background-color: #232830;
+    border: 1px solid #39414c;
+    border-radius: 4px;
+}
+
+QLabel#LoginHintTitle {
+    color: #c3ccd6;
+    background: transparent;
+    font-size: 9pt;
+    font-weight: bold;
+}
+
+QLabel#LoginHintText {
+    color: #939da9;
+    background: transparent;
+    font-size: 9pt;
+}
+
+QLabel#LoginError {
+    color: #ef6152;
+    background: transparent;
+    font-size: 9pt;
+}
+
+QLabel#LoginNote {
+    color: #6f7b88;
+    background: transparent;
+    font-size: 8pt;
 }
 
 /* --- Диалоги и сообщения ------------------------------------------------- */

@@ -24,27 +24,16 @@ from app import (  # noqa: E402
     APP_VERSION,
     DISCLAIMER,
 )
+from app.models.machine import MachineConfig  # noqa: E402
+from app.services.auth_service import Session  # noqa: E402
 from app.services.journal_service import JournalService  # noqa: E402
 from app.services.recipe_repository import RecipeError, RecipeRepository  # noqa: E402
+from app.ui.login_dialog import LoginDialog  # noqa: E402
 from app.ui.main_window import MainWindow  # noqa: E402
 from app.utils.paths import style_path  # noqa: E402
 
 
-def configure_high_dpi() -> None:
-    """Включает масштабирование под высокое разрешение.
 
-    В Qt 6 политики включены по умолчанию, поэтому настройка
-    выполняется только если атрибут ещё существует.
-    """
-    from PySide6.QtCore import Qt
-    from PySide6.QtGui import QGuiApplication
-
-    if hasattr(Qt.ApplicationAttribute, "AA_UseHighDpiPixmaps"):
-        QGuiApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
-    if hasattr(Qt.ApplicationAttribute, "AA_EnableHighDpiScaling"):
-        QGuiApplication.setAttribute(
-            Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True
-        )
 
 
 def load_stylesheet() -> str:
@@ -77,9 +66,7 @@ def report_startup_error(title: str, message: str) -> None:
 
 
 def main() -> int:
-    """Создаёт приложение, главное окно и запускает цикл событий."""
-    configure_high_dpi()
-
+    """Создаёт приложение и работает в цикле «вход — работа — смена входа»."""
     from PySide6.QtWidgets import QApplication
 
     application = QApplication(sys.argv)
@@ -103,11 +90,62 @@ def main() -> int:
         )
         return 1
 
-    journal = JournalService()
-    window = MainWindow(repository, journal)
-    window.show()
+    while True:
+        session = request_login(repository.machine)
+        if session is None:
+            # Пользователь закрыл окно входа: выходим без сообщения
+            # об ошибке. Это нормальный исход, а не сбой.
+            return 0
 
-    return application.exec()
+        if not run_session(application, repository, session):
+            return 0
+
+
+def run_session(
+    application: QApplication, repository: RecipeRepository, session: Session
+) -> bool:
+    """Открывает главное окно и ждёт либо выход из программы, либо смену входа.
+
+    Возвращает ``True``, если нужно вернуться к окну входа, и ``False``,
+    если пользователь закрыл программу. Окно пересоздаётся на каждой
+    итерации: права и подпись сотрудника задаются в конструкторе, поэтому
+    смена пользователя не должна оставлять в интерфейсе следов прежнего.
+    """
+    from PySide6.QtCore import QEventLoop
+
+    window = MainWindow(repository, JournalService(), session)
+
+    # Локальный цикл событий вместо `application.exec()`: он нужен, чтобы
+    # отличить «закрыли окно» от «просили сменить пользователя» — оба
+    # случая выглядят одинаково, если слушать `application.exec()`.
+    loop = QEventLoop()
+    switch_user = {"requested": False}
+
+    def on_logout() -> None:
+        switch_user["requested"] = True
+        loop.quit()
+
+    window.logoutRequested.connect(on_logout)
+    window.show()
+    loop.exec()
+    window.close()
+
+    if switch_user["requested"]:
+        return True
+
+    return False
+
+
+def request_login(machine: MachineConfig) -> Session | None:
+    """Показывает окно входа и возвращает сессию сотрудника.
+
+    Отмена входа — это нормальный исход, а не сбой, поэтому возвращается
+    ``None``, и ``main()` завершает работу без диалога об ошибке.
+    """
+    dialog = LoginDialog(machine)
+    if dialog.exec() != LoginDialog.DialogCode.Accepted:
+        return None
+    return dialog.session()
 
 
 if __name__ == "__main__":

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QPlainTextEdit,
+    QPushButton,
     QSplitter,
     QTabWidget,
     QVBoxLayout,
@@ -24,6 +25,7 @@ from app.core.validation import pipe_to_text, validate_pipe
 from app.models.machine import MachineConfig
 from app.models.pipe import Pipe
 from app.models.result import CalculationResult
+from app.services.auth_service import Session
 from app.services.journal_service import (
     STATUS_APPLIED,
     STATUS_CALCULATED,
@@ -45,6 +47,7 @@ from app.ui.dialogs import (
 )
 from app.ui.input_panel import InputPanel
 from app.ui.journal_tab import JournalTab
+from app.ui.labels import ElidedLabel
 from app.ui.machine_view import (
     STATUS_CALCULATED as SCHEMA_CALCULATED,
     MachineView,
@@ -79,16 +82,23 @@ class MainWindow(QMainWindow):
     непредвиденных исключений, чтобы демонстрация не прерывалась.
     """
 
+    #: Запрос на выход из учётной записи. Главное окно само ничего не
+    #: открывает: новую сессию создаёт `main.py`, поэтому смена
+    #: пользователя и пересборка окна живут в одном месте.
+    logoutRequested = Signal()
+
     def __init__(
         self,
         repository: RecipeRepository,
         journal: JournalService,
+        session: Session,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._repository = repository
         self._journal = journal
         self._machine: MachineConfig = repository.machine
+        self._session = session
 
         self._pipe: Pipe | None = None
         self._result: CalculationResult | None = None
@@ -158,6 +168,12 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(6, 8, 6, 6)
         layout.setSpacing(8)
 
+        # Права роли применяются до сборки вкладок: панели скрываются
+        # до того, как попадут в сплиттер, поэтому вёрстка сразу
+        # учитывает то, какие блоки доступны сотруднику.
+        self.input_panel.apply_role(self._session)
+        self.result_panel.apply_role(self._session)
+
         top_splitter = QSplitter(Qt.Orientation.Horizontal)
         top_splitter.setChildrenCollapsible(False)
         top_splitter.addWidget(self.input_panel)
@@ -218,18 +234,55 @@ class MainWindow(QMainWindow):
         return box
 
     def _build_status_bar(self) -> None:
-        """Строка состояния с постоянной меткой «Демо-режим»."""
+        """Строка состояния: кто вошёл, роль, выход и текущий статус."""
         status = self.statusBar()
 
-        self.demo_badge = QLabel("Демо-режим")
-        self.demo_badge.setObjectName("DemoBadge")
-        status.addPermanentWidget(self.demo_badge)
+        # ФИО и роль держим перед именем машины: сотрудник должен видеть,
+        # под каким доступом он работает, иначе права незаметны.
+        self.user_label = QLabel(self._session_badge_text())
+        self.user_label.setObjectName("UserBadge")
+        self.user_label.setToolTip(f"Вход выполнен: {self._session.login_time}")
+        # Метка сотрудника не сокращается: под кем идёт работа важнее
+        # имени машины, поэтому при нехватке места ужимаются соседи.
+        self.user_label.setMinimumWidth(
+            self.user_label.fontMetrics().horizontalAdvance(
+                self.user_label.text()
+            )
+        )
+        status.addPermanentWidget(self.user_label)
 
-        self.machine_label = QLabel(self._machine.name)
+        # Выход стоит сразу рядом с именем: вход и выход должны быть
+        # на одном экране, иначе смена сотрудника ищется по меню.
+        self.logout_button = QPushButton("Сменить пользователя")
+        self.logout_button.setObjectName("LogoutButton")
+        self.logout_button.setToolTip(
+            "Выйти из учётной записи и войти заново"
+        )
+        self.logout_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.logout_button.clicked.connect(
+            self._guard(self._on_logout)
+        )
+        status.addPermanentWidget(self.logout_button)
+
+        self.machine_label = ElidedLabel(self._machine.name)
+        # Имя машины уступает место статусу: какая машина стоит в
+        # наряде, известно и так, а что происходит прямо сейчас — нет.
+        self.machine_label.setMinimumWidth(60)
+        self.machine_label.setMaximumWidth(280)
         status.addPermanentWidget(self.machine_label)
 
-        self.status_label = QLabel("Готово к работе")
+        self.status_label = ElidedLabel("Готово к работе")
+        self.status_label.setMinimumWidth(160)
         status.addWidget(self.status_label)
+
+    def _session_badge_text(self) -> str:
+        """Текст метки сотрудника в строке состояния.
+
+        Время входа в подпись не входит: строка состояния уже занята
+        именем машины и кнопкой выхода, и длинная подпись обрезается при
+        минимальной ширине окна. Оно доступно в подсказке.
+        """
+        return f"{self._session.operator_name} · {self._session.role_title}"
 
     def _build_menu(self) -> None:
         """Меню приложения: повтор расчёта и выход."""
@@ -252,8 +305,15 @@ class MainWindow(QMainWindow):
 
         file_menu.addSeparator()
 
+        logout_action = QAction("&Сменить пользователя", self)
+        logout_action.setShortcut("Ctrl+L")
+        logout_action.setStatusTip("Выйти из учётной записи и войти заново")
+        logout_action.triggered.connect(self._guard(self._on_logout))
+        file_menu.addAction(logout_action)
+
         exit_action = QAction("&Выход", self)
         exit_action.setShortcut("Alt+F4")
+        exit_action.setStatusTip("Закрыть программу")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
 
@@ -399,7 +459,7 @@ class MainWindow(QMainWindow):
         self.result_panel.show_result(result, pipe.required_straightness)
         self.input_panel.set_apply_enabled(result.is_valid)
         self.input_panel.set_manual_enabled(result.is_valid)
-        self.input_panel.set_explanation_enabled(True)
+        self.result_panel.set_explanation_enabled(True)
 
         self._journal.add_entry(pipe, result, STATUS_CALCULATED, "Расчёт выполнен")
         self._log_event(f"Выполнен расчёт: итоговая уставка {format_mm(result.final_gap)}")
@@ -544,7 +604,6 @@ class MainWindow(QMainWindow):
         self.machine_view.set_pipe_diameter(pipe.diameter)
         self.machine_view.reset_to_machine_minimum()
         self.result_panel.clear()
-        self.input_panel.set_explanation_enabled(False)
         self._invalidate_result("Форма сброшена, готов к расчёту")
         self._log_event("Форма сброшена к исходным значениям")
 
@@ -581,7 +640,6 @@ class MainWindow(QMainWindow):
         self.result_panel.clear()
         self.input_panel.set_apply_enabled(False)
         self.input_panel.set_manual_enabled(False)
-        self.input_panel.set_explanation_enabled(False)
         self.machine_view.set_pipe_diameter(pipe.diameter)
         self.machine_view.reset_to_machine_minimum()
         self._set_status("Данные загружены, выполните расчёт")
@@ -790,6 +848,32 @@ class MainWindow(QMainWindow):
     def _go_to_about(self) -> None:
         """Переходит на вкладку «О системе»."""
         self.tabs.setCurrentIndex(TAB_ABOUT)
+
+    def _on_logout(self) -> None:
+        """Просит сменить пользователя и сообщает об этом наружу.
+
+        Окно входа открывает `main.py`, а не сам слот: только там решается,
+        что делать при отмене входа — закрыть программу или остаться.
+        """
+        # Идущий демо-сценарий останавливаем: его таймеры управляют
+        # уже несуществующей после смены пользователя формой.
+        self._finish_scenario()
+
+        if not confirm(
+            self,
+            "Сменить пользователя?",
+            f"Вы выйдете из учётной записи «{self._session.operator_name}».\n\n"
+            "Записи в журнале переналадок сохранятся: они уже записаны "
+            "на диск. Несохранённый расчёт и выбранный заказ будут сброшены.",
+            accept_text="Выйти",
+        ):
+            return
+
+        self._log_event(
+            f"Выход из учётной записи: {self._session.operator_name} "
+            f"({self._session.role_title})"
+        )
+        self.logoutRequested.emit()
 
     def _on_tab_changed(self, index: int) -> None:
         """Обновляет содержимое вкладки при переключении."""

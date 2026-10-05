@@ -26,6 +26,7 @@ from app.models.result import (
     RISK_MEDIUM,
     CalculationResult,
 )
+from app.services.auth_service import Session
 from app.utils.formatting import (
     format_m_per_min,
     format_minutes,
@@ -67,7 +68,8 @@ class ResultPanel(QScrollArea):
 
         layout.addWidget(self._build_gap_box())
         layout.addWidget(self._build_process_box())
-        layout.addWidget(self._build_effect_box())
+        self._effect_box = self._build_effect_box()
+        layout.addWidget(self._effect_box)
         layout.addWidget(self._build_warnings_box())
         layout.addStretch(1)
 
@@ -162,7 +164,13 @@ class ResultPanel(QScrollArea):
         return box
 
     def _build_effect_box(self) -> QGroupBox:
-        """Группа «Ожидаемый эффект»: время, прогоны, брак."""
+        """Группа «Ожидаемый эффект»: время, прогоны, брак.
+
+        Группа скрывается для оператора станка: экономия переналадки
+        интересует не того, кто подбирает уставку, а того, кто оценивает
+        эффект проекта. Поля остаются в панели, чтобы общий код вывода
+        результата не различался для обеих ролей.
+        """
         box = QGroupBox("Ожидаемый эффект")
         layout = QVBoxLayout(box)
         layout.setSpacing(6)
@@ -251,6 +259,18 @@ class ResultPanel(QScrollArea):
     # Отображение результата
     # ------------------------------------------------------------------
 
+    def apply_role(self, session: Session) -> None:
+        """Настраивает панель под роль сотрудника.
+
+        Оператору скрывается «Ожидаемый эффект»: это метрики для оценки
+        проекта, а не для переналадки конкретной трубы.
+        """
+        self._effect_box.setVisible(session.show_effect_panel)
+
+    def set_explanation_enabled(self, enabled: bool) -> None:
+        """Управляет доступностью кнопки «Показать обоснование»."""
+        self.explanation_button.setEnabled(enabled)
+
     def clear(self) -> None:
         """Сбрасывает панель в состояние «расчёта ещё не было»."""
         for field in self._all_fields():
@@ -259,8 +279,18 @@ class ResultPanel(QScrollArea):
         self.risk_label.setObjectName("StatusBadge")
         self._restyle_risk_label()
         self.warnings_list.clear()
-        self.no_warnings_label.setVisible(False)
+        # До первого расчёта показываем подсказку, а не пустую рамку:
+        # иначе панель занимает место впустую и выглядит сломанной.
+        self._show_empty_warnings()
         self.explanation_button.setEnabled(False)
+
+    def _show_empty_warnings(self) -> None:
+        """Показывает состояние «расчёта ещё не было» в блоке предупреждений."""
+        self.warnings_list.setVisible(False)
+        self.no_warnings_label.setText(
+            "Предупреждения появятся после расчёта настройки."
+        )
+        self.no_warnings_label.setVisible(True)
 
     def _all_fields(self) -> tuple[QLineEdit, ...]:
         """Все поля результата — для массового сброса."""

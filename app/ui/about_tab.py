@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 
 from app import APP_VERSION
 from app.models.machine import MachineConfig
+from app.services.auth_service import accounts_without_passwords, role_summary
 from app.services.journal_service import JournalService
 from app.ui.dialogs import StylePreviewWidget
 from app.utils.paths import log_directory
@@ -114,6 +115,22 @@ class AboutTab(QScrollArea):
             f"<li>{item}</li>" for item in IMPLEMENTATION_PLAN
         )
         machine = self._machine
+        role_rows = "".join(
+            f"<tr><td style='padding:2px 14px 2px 0;'>{account.full_name}</td>"
+            f"<td style='padding:2px 14px 2px 0; color:#a0aab5;'>{account.position}</td>"
+            f"<td style='color:#a0aab5;'>{account.login}</td></tr>"
+            for account in accounts_without_passwords()
+        )
+        accounts_html = (
+            "<table style='margin:6px 0 12px 0;'>"
+            "<tr style='color:#a0aab5;'>"
+            "<th align='left' style='padding:0 14px 4px 0;'>Сотрудник</th>"
+            "<th align='left' style='padding:0 14px 4px 0;'>Должность</th>"
+            "<th align='left' style='padding:0 14px 4px 0;'>Логин</th>"
+            "</tr>"
+            f"{role_rows}</table>"
+        )
+        roles_html = "".join(f"<li>{text}</li>" for text in role_summary())
         formula = (
             "Итоговая уставка = Базовая уставка<br/>"
             "<span style='color:#a0aab5'>"
@@ -179,8 +196,25 @@ class AboutTab(QScrollArea):
             для следующих версий модели.
           </p>
 
+          <h2 style="color:#ff8c00;">Роли и доступ</h2>
+          <p>
+            Программа открывается с окном входа. Роль определяется учётной
+            записью и не выбирается вручную, поэтому оператор не может
+            случайно получить права контролёра. Расчёт от роли не зависит —
+            обе роли получают одну и ту же уставку.
+          </p>
+          <p>
+            <b>Демонстрационные учётные записи</b> (пароли — в README проекта):
+          </p>
+          {accounts_html}
+          <p>Что доступно каждой роли:</p>
+          <ul>{roles_html}</ul>
+
           <h2 style="color:#ff8c00;">Ограничения</h2>
           <ul>
+            <li>Авторизация — учебная заглушка: пароли хранятся в исходном
+                коде открытым текстом и сравниваются напрямую. Настоящей
+                системы контроля доступа здесь нет.</li>
             <li>Это не система управления станком: программа не выдаёт команд
                 оборудованию и не контролирует его положение.</li>
             <li>Все коэффициенты демонстрационные и не являются

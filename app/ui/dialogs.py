@@ -455,8 +455,13 @@ def show_warning(parent: QWidget, title: str, text: str) -> None:
     box.exec()
 
 
-def confirm(parent: QWidget, title: str, text: str) -> bool:
-    """Запрашивает подтверждение действия."""
+def confirm(parent: QWidget, title: str, text: str, accept_text: str = "Применить") -> bool:
+    """Запрашивает подтверждение действия.
+
+    Текст кнопки согласия задаётся параметром: у разных действий он
+    разный, и надпись «Применить» в вопросе «выйти из аккаунта?»
+    сбивала бы с толку.
+    """
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(DIALOG_TITLE)
@@ -466,7 +471,7 @@ def confirm(parent: QWidget, title: str, text: str) -> bool:
         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
     )
     yes_button = box.button(QMessageBox.StandardButton.Yes)
-    yes_button.setText("Применить")
+    yes_button.setText(accept_text)
     no_button = box.button(QMessageBox.StandardButton.No)
     no_button.setText("Отмена")
     return box.exec() == QMessageBox.StandardButton.Yes

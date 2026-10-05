@@ -21,12 +21,21 @@ if str(PROJECT_ROOT) not in sys.path:
 from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from app.services.auth_service import Session, authenticate  # noqa: E402
 from app.services.journal_service import JournalService  # noqa: E402
 from app.services.recipe_repository import RecipeRepository  # noqa: E402
 from app.ui.main_window import MainWindow  # noqa: E402
 from app.utils.paths import style_path  # noqa: E402
 
 PREVIEW_DIR = PROJECT_ROOT / ".preview"
+
+
+def make_session(login: str, password: str) -> Session:
+    """Создаёт сессию для рендера снимков."""
+    session = authenticate(login, password)
+    if session is None:
+        raise SystemExit(f"Учётная запись {login} не найдена")
+    return session
 
 
 def capture(window: MainWindow, application: QApplication, name: str) -> None:
@@ -49,7 +58,9 @@ def main() -> int:
     if stylesheet.exists():
         application.setStyleSheet(stylesheet.read_text(encoding="utf-8"))
 
-    window = MainWindow(RecipeRepository(), JournalService())
+    window = MainWindow(
+        RecipeRepository(), JournalService(), make_session("korablev", "4321")
+    )
     window.resize(1500, 900)
     window.show()
     application.processEvents()
@@ -98,6 +109,19 @@ def main() -> int:
         print("Статус:", window.status_label.text())
     else:
         print("ВНИМАНИЕ: демо-сценарий не завершился за 11 секунд")
+
+    # Режим оператора: у него скрыты «Заказ и операция» и «Ожидаемый эффект».
+    operator = MainWindow(
+        RecipeRepository(), JournalService(), make_session("akulov", "1234")
+    )
+    operator.resize(1500, 900)
+    operator.show()
+    operator._on_calculate()
+    application.processEvents()
+    print()
+    print("Снимок режима оператора:")
+    capture(operator, application, "08_setup_operator")
+
     return 0
 
 
